@@ -22,12 +22,14 @@ package util
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/url"
 	"os"
 	"path/filepath"
 
 	"golang.org/x/sys/unix"
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -48,21 +50,21 @@ func CreateListener(endpoint string) (net.Listener, error) {
 	// Unlink to cleanup the previous socket file.
 	err = unix.Unlink(addr)
 	if err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("failed to unlink socket file %q: %w", addr, err)
+		return nil, fmt.Errorf("failed to unlink socket file %q: %v", addr, err)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(addr), 0750); err != nil {
-		return nil, fmt.Errorf("error creating socket directory %q: %w", filepath.Dir(addr), err)
+		return nil, fmt.Errorf("error creating socket directory %q: %v", filepath.Dir(addr), err)
 	}
 
 	// Create the socket on a tempfile and move it to the destination socket to handle improper cleanup
-	file, err := os.CreateTemp(filepath.Dir(addr), "")
+	file, err := ioutil.TempFile(filepath.Dir(addr), "")
 	if err != nil {
-		return nil, fmt.Errorf("failed to create temporary file: %w", err)
+		return nil, fmt.Errorf("failed to create temporary file: %v", err)
 	}
 
 	if err := os.Remove(file.Name()); err != nil {
-		return nil, fmt.Errorf("failed to remove temporary file: %w", err)
+		return nil, fmt.Errorf("failed to remove temporary file: %v", err)
 	}
 
 	l, err := net.Listen(protocol, file.Name())
@@ -71,7 +73,7 @@ func CreateListener(endpoint string) (net.Listener, error) {
 	}
 
 	if err = os.Rename(file.Name(), addr); err != nil {
-		return nil, fmt.Errorf("failed to move temporary file to addr %q: %w", addr, err)
+		return nil, fmt.Errorf("failed to move temporary file to addr %q: %v", addr, err)
 	}
 
 	return l, nil
@@ -98,6 +100,9 @@ func parseEndpointWithFallbackProtocol(endpoint string, fallbackProtocol string)
 	if protocol, addr, err = parseEndpoint(endpoint); err != nil && protocol == "" {
 		fallbackEndpoint := fallbackProtocol + "://" + endpoint
 		protocol, addr, err = parseEndpoint(fallbackEndpoint)
+		if err == nil {
+			klog.InfoS("Using this format as endpoint is deprecated, please consider using full url format.", "deprecatedFormat", endpoint, "fullURLFormat", fallbackEndpoint)
+		}
 	}
 	return
 }
@@ -121,4 +126,21 @@ func parseEndpoint(endpoint string) (string, string, error) {
 	default:
 		return u.Scheme, "", fmt.Errorf("protocol %q not supported", u.Scheme)
 	}
+}
+
+// IsUnixDomainSocket returns whether a given file is a AF_UNIX socket file
+func IsUnixDomainSocket(filePath string) (bool, error) {
+	fi, err := os.Stat(filePath)
+	if err != nil {
+		return false, fmt.Errorf("stat file %s failed: %v", filePath, err)
+	}
+	if fi.Mode()&os.ModeSocket == 0 {
+		return false, nil
+	}
+	return true, nil
+}
+
+// NormalizePath is a no-op for Linux for now
+func NormalizePath(path string) string {
+	return path
 }

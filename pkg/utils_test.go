@@ -14,14 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package cri
+package pkg
 
 import (
 	"fmt"
-	"testing"
-
 	"github.com/stretchr/testify/assert"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
+	"testing"
 )
 
 func makePodSandboxMetadata(name, namespace, uid string) *runtimeapi.PodSandboxMetadata {
@@ -102,7 +101,7 @@ func TestVerifySandboxStatus(t *testing.T) {
 		if actual != nil {
 			assert.EqualError(t, actual, status.expected.Error())
 		} else {
-			assert.NoError(t, status.expected)
+			assert.Nil(t, status.expected)
 		}
 	}
 }
@@ -175,7 +174,7 @@ func TestVerifyContainerStatus(t *testing.T) {
 		if actual != nil {
 			assert.EqualError(t, actual, status.expected.Error())
 		} else {
-			assert.NoError(t, status.expected)
+			assert.Nil(t, status.expected)
 		}
 	}
 }

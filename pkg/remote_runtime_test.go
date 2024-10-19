@@ -14,18 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package cri
+package pkg
 
 import (
-	"context"
 	"os"
 	"testing"
 	"time"
-
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
-	oteltrace "go.opentelemetry.io/otel/trace"
-	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,10 +27,11 @@ import (
 	apitest "k8s.io/cri-api/pkg/apis/testing"
 	fakeremote "k8s.io/cri-client/pkg/fake"
 	"k8s.io/cri-client/pkg/util"
-	"k8s.io/klog/v2"
 )
 
-const defaultConnectionTimeout = 15 * time.Second
+const (
+	defaultConnectionTimeout = 15 * time.Second
+)
 
 // createAndStartFakeRemoteRuntime creates and starts fakeremote.RemoteRuntime.
 // It returns the RemoteRuntime, endpoint on success.
@@ -52,44 +47,10 @@ func createAndStartFakeRemoteRuntime(t *testing.T) (*fakeremote.RemoteRuntime, s
 }
 
 func createRemoteRuntimeService(endpoint string, t *testing.T) internalapi.RuntimeService {
-	logger := klog.Background()
-	runtimeService, err := NewRemoteRuntimeService(endpoint, defaultConnectionTimeout, noop.NewTracerProvider(), &logger)
-
+	runtimeService, err := NewRemoteRuntimeService(endpoint, defaultConnectionTimeout)
 	require.NoError(t, err)
 
 	return runtimeService
-}
-
-func createRemoteRuntimeServiceWithTracerProvider(endpoint string, tp oteltrace.TracerProvider, t *testing.T) internalapi.RuntimeService {
-	logger := klog.Background()
-	runtimeService, err := NewRemoteRuntimeService(endpoint, defaultConnectionTimeout, tp, &logger)
-	require.NoError(t, err)
-
-	return runtimeService
-}
-
-func TestGetSpans(t *testing.T) {
-	fakeRuntime, endpoint := createAndStartFakeRemoteRuntime(t)
-	defer func() {
-		fakeRuntime.Stop()
-		// clear endpoint file
-		if addr, _, err := util.GetAddressAndDialer(endpoint); err == nil {
-			if _, err := os.Stat(addr); err == nil {
-				os.Remove(addr)
-			}
-		}
-	}()
-	exp := tracetest.NewInMemoryExporter()
-	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exp),
-	)
-	ctx := context.Background()
-	rtSvc := createRemoteRuntimeServiceWithTracerProvider(endpoint, tp, t)
-	_, err := rtSvc.Version(ctx, apitest.FakeVersion)
-	require.NoError(t, err)
-	err = tp.ForceFlush(ctx)
-	require.NoError(t, err)
-	assert.NotEmpty(t, exp.GetSpans())
 }
 
 func TestVersion(t *testing.T) {
@@ -104,10 +65,9 @@ func TestVersion(t *testing.T) {
 		}
 	}()
 
-	ctx := context.Background()
-	rtSvc := createRemoteRuntimeService(endpoint, t)
-	version, err := rtSvc.Version(ctx, apitest.FakeVersion)
-	require.NoError(t, err)
+	r := createRemoteRuntimeService(endpoint, t)
+	version, err := r.Version(apitest.FakeVersion)
+	assert.NoError(t, err)
 	assert.Equal(t, apitest.FakeVersion, version.Version)
 	assert.Equal(t, apitest.FakeRuntimeName, version.RuntimeName)
 }

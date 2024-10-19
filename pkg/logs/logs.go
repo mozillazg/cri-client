@@ -422,7 +422,7 @@ func ReadLogs(ctx context.Context, logger *klog.Logger, path, containerID string
 }
 
 func isContainerRunning(ctx context.Context, logger *klog.Logger, id string, r internalapi.RuntimeService) (bool, error) {
-	resp, err := r.ContainerStatus(ctx, id, false)
+	resp, err := r.ContainerStatus(id, false)
 	if err != nil {
 		// Assume that the container is still running when the runtime is
 		// unavailable. Most runtimes support that containers can be in running
